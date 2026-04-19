@@ -40,6 +40,14 @@ cd foodex
 bash scripts/setup_foodex_env.sh
 ```
 
+If the CUDA PyTorch installation fails with `No space left on device`, create the environment outside the cloned repository, for example in `/tmp`:
+
+```bash
+cd foodex
+rm -rf foodex-env /tmp/foodex-env
+FOODEX_ENV_DIR=/tmp/foodex-env bash scripts/setup_foodex_env.sh
+```
+
 Then select this kernel in Jupyter:
 
 ```text

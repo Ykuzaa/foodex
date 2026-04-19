@@ -36,12 +36,16 @@ esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENV_DIR="${PROJECT_ROOT}/${ENV_NAME}"
+ENV_DIR="${FOODEX_ENV_DIR:-${PROJECT_ROOT}/${ENV_NAME}}"
 
 echo "Project root : ${PROJECT_ROOT}"
 echo "Python       : ${PYTHON_BIN} (${PY_VERSION})"
 echo "Env          : ${ENV_DIR}"
 echo "Torch index  : ${TORCH_CUDA_INDEX}"
+echo
+echo "Disk space:"
+df -h "${PROJECT_ROOT}" "$(dirname "${ENV_DIR}")" 2>/dev/null || true
+echo
 
 env_is_complete() {
   [[ -x "${ENV_DIR}/bin/python" ]] \
