@@ -4,27 +4,27 @@ set -euo pipefail
 PYTHON_BIN="${PYTHON_BIN:-}"
 
 if [[ -z "${PYTHON_BIN}" ]]; then
-  for candidate in python3.12 python3.11 python3.10 python; do
+  # Prefer the Python executable that already has a working CUDA PyTorch install.
+  for candidate in python python3.13 python3.12 python3.11 python3.10; do
     if command -v "${candidate}" >/dev/null 2>&1; then
-      candidate_version="$("${candidate}" - <<'PY'
+      if "${candidate}" - <<'PY' >/dev/null 2>&1
 import sys
-print(f"{sys.version_info.major}.{sys.version_info.minor}")
+if sys.version_info < (3, 10):
+    raise SystemExit(1)
+import torch
+raise SystemExit(0 if torch.cuda.is_available() else 1)
 PY
-)"
-      case "${candidate_version}" in
-        3.10|3.11|3.12)
-          PYTHON_BIN="${candidate}"
-          break
-          ;;
-      esac
+      then
+        PYTHON_BIN="${candidate}"
+        break
+      fi
     fi
   done
 fi
 
 if [[ -z "${PYTHON_BIN}" ]]; then
-  echo "ERROR: Aucun Python 3.10/3.11/3.12 trouve."
-  echo "Le Python par defaut de cette image semble etre Python 3.13, incompatible avec cette stack."
-  echo "Essaie de selectionner une image/kernel Jupyter PyTorch GPU en Python 3.10/3.11/3.12."
+  echo "ERROR: Aucun Python avec PyTorch CUDA fonctionnel trouve."
+  echo "Teste avec: python -c 'import torch; print(torch.cuda.is_available())'"
   exit 1
 fi
 
@@ -35,10 +35,10 @@ echo
 "${PYTHON_BIN}" - <<'PY'
 import sys
 
-if not ((3, 10) <= (sys.version_info.major, sys.version_info.minor) <= (3, 12)):
+if sys.version_info < (3, 10):
     raise SystemExit(
         f"ERROR: Python {sys.version_info.major}.{sys.version_info.minor} detecte. "
-        "Utilise un kernel Python 3.10/3.11/3.12, pas Python 3.13."
+        "Utilise un kernel Python >= 3.10."
     )
 
 try:

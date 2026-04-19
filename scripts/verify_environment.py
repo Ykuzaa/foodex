@@ -8,10 +8,10 @@ def fail(message: str) -> None:
 
 
 version = sys.version_info
-if not ((3, 10) <= (version.major, version.minor) <= (3, 12)):
+if version < (3, 10):
     fail(
         f"Python {version.major}.{version.minor} detecte. "
-        "Utilise Python 3.10, 3.11 ou 3.12 pour PyTorch/Ultralytics."
+        "Utilise Python >= 3.10 pour PyTorch/Ultralytics."
     )
 
 try:
