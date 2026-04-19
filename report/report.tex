@@ -1,0 +1,129 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{url}
+
+\newcommand{\optionalfigure}[2]{%
+  \IfFileExists{#1}{%
+    \includegraphics[width=#2\linewidth]{#1}%
+  }{%
+    \fbox{\parbox{0.8\linewidth}{\centering Figure not generated yet: \texttt{#1}}}%
+  }%
+}
+
+\title{Food Detection with YOLO11}
+\author{Food Detection Project}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report presents a transfer-learning pipeline for food object detection on four classes: pizza, sandwich, pasta, and hotdog. A YOLO11-based detector is trained and evaluated using standard object-detection metrics, including precision, recall, mAP@0.5, and mAP@0.5:0.95. The final section discusses observed failure modes and suggests architecture or data improvements.
+\end{abstract}
+
+\section{Introduction}
+Food object detection is a practical computer-vision task where the model must localize and classify food items in images. The task is challenging because food has high intra-class variability, strong dependence on lighting and presentation, and visual similarity between some classes.
+
+This work uses transfer learning with the YOLO family of one-stage detectors. YOLO models are widely used for real-time object detection because they directly predict bounding boxes and class probabilities from full images \cite{redmon2016yolo}. The implemented training pipeline uses Ultralytics YOLO11 \cite{ultralytics_yolo11}, with YOLO11s as a baseline and YOLO11m as the main model.
+
+\section{Dataset}
+The dataset follows the YOLO detection format. Images and labels are split into training, validation, and test subsets. Each annotation file contains one object per line with the format:
+\[
+\texttt{class\_id}\; x_c\; y_c\; w\; h
+\]
+where coordinates are normalized between 0 and 1.
+
+The dataset audit performed in the notebook checks image-label pairing, invalid class IDs, malformed label rows, bounding-box coordinate ranges, and class distribution.
+
+\begin{figure}[H]
+  \centering
+  \optionalfigure{figures/class_distribution.png}{0.85}
+  \caption{Class distribution by split.}
+  \label{fig:class_distribution}
+\end{figure}
+
+\section{Methodology}
+The selected method is fine-tuning a COCO-pretrained YOLO11 model. Transfer learning is preferred over training from scratch because the dataset is specialized and relatively small compared with large-scale detection datasets. A pretrained model already contains general visual features such as edges, textures, shapes, and object-level representations.
+
+Two models are considered:
+\begin{itemize}
+  \item YOLO11s: lightweight baseline for fast iteration.
+  \item YOLO11m: main model, selected as a better accuracy-capacity compromise for training on an NVIDIA RTX A6000.
+\end{itemize}
+
+Transformer-based detectors such as DETR \cite{carion2020detr} and Deformable DETR \cite{zhu2021deformable} were considered but not selected for the first training pipeline because they are more complex to fine-tune and typically require more careful training setup. YOLOv9 \cite{wang2024yolov9} is also a strong alternative, but the Ultralytics YOLO11 workflow is simpler for a reproducible notebook pipeline.
+
+\section{Hyperparameters}
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+Model & YOLO11m pretrained on COCO \\
+Image size & 640 \\
+Epochs & 150 \\
+Early stopping patience & 25 \\
+Optimizer & AdamW \\
+Initial learning rate & 0.001 \\
+Final LR factor & 0.01 \\
+Weight decay & 0.0005 \\
+Warmup epochs & 3 \\
+Scheduler & Cosine LR \\
+Batch size & Auto \\
+Seed & 42 \\
+\bottomrule
+\end{tabular}
+\caption{Main training hyperparameters.}
+\label{tab:hyperparameters}
+\end{table}
+
+The augmentation policy includes HSV color perturbation, translation, scale jitter, horizontal flips, mosaic augmentation, light mixup, and mosaic closing during the final epochs. These choices are motivated by the visual variability of food images and by the need to reduce overfitting.
+
+\section{Results}
+After running the notebook, insert the generated metrics table and figures here.
+
+\begin{figure}[H]
+  \centering
+  \optionalfigure{figures/training_curves.png}{0.95}
+  \caption{Training and validation curves.}
+  \label{fig:training_curves}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \optionalfigure{figures/confusion_matrix.png}{0.75}
+  \caption{Confusion matrix on the validation or test set.}
+  \label{fig:confusion_matrix}
+\end{figure}
+
+\section{Qualitative Inference}
+\begin{figure}[H]
+  \centering
+  \optionalfigure{figures/inference_examples.png}{0.95}
+  \caption{Example predictions on test images.}
+  \label{fig:inference_examples}
+\end{figure}
+
+\section{Error Analysis and Recommendations}
+The notebook exports class-level metrics and visual predictions. The recommended modifications depend on the observed behavior:
+\begin{itemize}
+  \item If training loss decreases but validation mAP stagnates, reduce model capacity, increase regularization, or improve dataset diversity.
+  \item If both training and validation metrics are weak, increase epochs, inspect label quality, or use a larger image size such as 768.
+  \item If one class has low recall, collect more examples for that class or apply targeted augmentation.
+  \item If visually similar classes are confused, inspect the confusion matrix and add hard examples.
+\end{itemize}
+
+\section{Conclusion}
+The proposed pipeline provides a reproducible workflow for training, evaluating, and reporting a YOLO11-based food detector. The first recommended model is YOLO11m, with YOLO11s kept as a lightweight baseline and fallback in case of overfitting.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

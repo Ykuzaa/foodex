@@ -1,0 +1,9 @@
+train: ../images/train
+val: ../images/val
+test: ../images/test 
+
+names: 
+    0: pizza
+    1: sandwich
+    2: pasta
+    3: hotdog

@@ -1,0 +1,33 @@
+# Training outputs
+runs_food/
+runs/
+wandb/
+mlruns/
+
+# Model artifacts
+*.pt
+*.pth
+*.onnx
+*.engine
+*.torchscript
+
+# Notebook/runtime caches
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+
+# LaTeX build artifacts
+report/*.aux
+report/*.bbl
+report/*.blg
+report/*.log
+report/*.out
+report/*.toc
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+
+# OS / transfer metadata
+.DS_Store
+Thumbs.db
+*:Zone.Identifier*
