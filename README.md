@@ -33,13 +33,32 @@ The notebook detects the repository root automatically and reads `dataset/` from
 
 ## Training
 
-Open:
+First setup the environment once from a Jupyter terminal:
+
+```bash
+cd foodex
+bash scripts/setup_foodex_env.sh
+```
+
+Then select this kernel in Jupyter:
+
+```text
+Python - foodex-env
+```
+
+Optional quick check:
+
+```text
+notebooks/00_environment_check.ipynb
+```
+
+Then open:
 
 ```text
 notebooks/food_detection_training.ipynb
 ```
 
-Then run the audit and visualization cells first. To train:
+Run the audit and visualization cells first. To train:
 
 - set `RUN_BASELINE = True` for YOLO11s
 - set `RUN_MAIN_TRAINING = True` for YOLO11m

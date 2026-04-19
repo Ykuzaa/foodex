@@ -15,6 +15,10 @@ mlruns/
 .ipynb_checkpoints/
 __pycache__/
 *.pyc
+foodex-env/
+foodex-*-env/
+*.venv/
+.venv/
 
 # LaTeX build artifacts
 report/*.aux
