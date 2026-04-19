@@ -1,10 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PYTHON_BIN="${PYTHON_BIN:-python}"
+PYTHON_BIN="${PYTHON_BIN:-}"
+
+if [[ -z "${PYTHON_BIN}" ]]; then
+  for candidate in python3.12 python3.11 python3.10 python; do
+    if command -v "${candidate}" >/dev/null 2>&1; then
+      candidate_version="$("${candidate}" - <<'PY'
+import sys
+print(f"{sys.version_info.major}.{sys.version_info.minor}")
+PY
+)"
+      case "${candidate_version}" in
+        3.10|3.11|3.12)
+          PYTHON_BIN="${candidate}"
+          break
+          ;;
+      esac
+    fi
+  done
+fi
+
+if [[ -z "${PYTHON_BIN}" ]]; then
+  echo "ERROR: Aucun Python 3.10/3.11/3.12 trouve."
+  echo "Le Python par defaut de cette image semble etre Python 3.13, incompatible avec cette stack."
+  echo "Essaie de selectionner une image/kernel Jupyter PyTorch GPU en Python 3.10/3.11/3.12."
+  exit 1
+fi
 
 echo "Using Python: $(${PYTHON_BIN} -c 'import sys; print(sys.executable)')"
-echo "Version     : $(${PYTHON_BIN} -c 'import sys; print(sys.version.replace(chr(10), \" \"))')"
+echo "Version     : $(${PYTHON_BIN} -c 'import sys; print(sys.version.replace(chr(10), " "))')"
 echo
 
 "${PYTHON_BIN}" - <<'PY'
