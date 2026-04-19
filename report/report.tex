@@ -1,127 +1,327 @@
 \documentclass[11pt,a4paper]{article}
 
-\usepackage[margin=2.5cm]{geometry}
+\usepackage[margin=2.4cm]{geometry}
 \usepackage{graphicx}
 \usepackage{booktabs}
-\usepackage{hyperref}
+\usepackage[hypertexnames=false]{hyperref}
 \usepackage{float}
 \usepackage{amsmath}
+\usepackage{array}
 \usepackage{url}
 
 \newcommand{\optionalfigure}[2]{%
   \IfFileExists{#1}{%
     \includegraphics[width=#2\linewidth]{#1}%
   }{%
-    \fbox{\parbox{0.8\linewidth}{\centering Figure not generated yet: \texttt{#1}}}%
+    \fbox{\parbox{0.82\linewidth}{\centering Figure non disponible: \texttt{#1}}}%
   }%
 }
 
-\title{Food Detection with YOLO11}
-\author{Food Detection Project}
+\title{Detection d'aliments avec YOLO11}
+\author{Projet Food Detection}
 \date{\today}
 
 \begin{document}
+\sloppy
 \maketitle
 
 \begin{abstract}
-This report presents a transfer-learning pipeline for food object detection on four classes: pizza, sandwich, pasta, and hotdog. A YOLO11-based detector is trained and evaluated using standard object-detection metrics, including precision, recall, mAP@0.5, and mAP@0.5:0.95. The final section discusses observed failure modes and suggests architecture or data improvements.
+Ce rapport presente une pipeline complete de detection d'aliments sur quatre classes:
+pizza, sandwich, pasta et hotdog. Le travail repose sur du transfer learning avec
+YOLO11, entraine dans un notebook Jupyter sur une carte NVIDIA RTXA6000-48Q. Deux
+architectures ont ete comparees: YOLO11s et YOLO11m. Les resultats montrent que
+YOLO11s est le meilleur choix final pour ce jeu de donnees: il obtient une meilleure
+mAP@0.5:0.95 que YOLO11m sur la validation, tout en etant deux fois plus petit et
+environ trois fois moins couteux en calcul. Le modele retenu atteint sur le test
+une precision de 0.787, un rappel de 0.838, une mAP@0.5 de 0.878 et une
+mAP@0.5:0.95 de 0.626.
 \end{abstract}
 
 \section{Introduction}
-Food object detection is a practical computer-vision task where the model must localize and classify food items in images. The task is challenging because food has high intra-class variability, strong dependence on lighting and presentation, and visual similarity between some classes.
+La detection d'aliments consiste a localiser chaque aliment dans une image et a lui
+associer une classe. Contrairement a une classification simple, le modele doit
+produire des boites englobantes et gerer plusieurs objets dans une meme image. Le
+probleme est difficile car les aliments changent fortement d'apparence selon la
+recette, la lumiere, l'angle de prise de vue, le contenant et l'occlusion.
 
-This work uses transfer learning with the YOLO family of one-stage detectors. YOLO models are widely used for real-time object detection because they directly predict bounding boxes and class probabilities from full images \cite{redmon2016yolo}. The implemented training pipeline uses Ultralytics YOLO11 \cite{ultralytics_yolo11}, with YOLO11s as a baseline and YOLO11m as the main model.
+La famille YOLO est adaptee a ce contexte car elle realise la detection en une seule
+passe du reseau, ce qui donne un bon compromis entre precision et vitesse
+\cite{redmon2016yolo}. Dans ce projet, l'objectif n'etait pas de concevoir une
+architecture depuis zero, mais de construire une baseline solide, reproductible et
+facile a ameliorer. Le choix principal est donc le fine-tuning de modeles YOLO11
+pre-entraines sur COCO \cite{ultralytics_yolo11}.
 
-\section{Dataset}
-The dataset follows the YOLO detection format. Images and labels are split into training, validation, and test subsets. Each annotation file contains one object per line with the format:
+\section{Donnees}
+Le dataset est organise au format YOLO detection. Chaque image possede un fichier
+\texttt{.txt} contenant une ligne par objet:
 \[
-\texttt{class\_id}\; x_c\; y_c\; w\; h
+\texttt{class\_id}\quad x_c\quad y_c\quad w\quad h
 \]
-where coordinates are normalized between 0 and 1.
+ou les coordonnees sont normalisees entre 0 et 1. Les classes sont:
+\[
+0=\text{pizza},\quad 1=\text{sandwich},\quad 2=\text{pasta},\quad 3=\text{hotdog}.
+\]
 
-The dataset audit performed in the notebook checks image-label pairing, invalid class IDs, malformed label rows, bounding-box coordinate ranges, and class distribution.
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrrr}
+\toprule
+Split & Images & Pizza & Sandwich & Pasta & Hotdog \\
+\midrule
+Train & 1454 & 188 & 402 & 384 images / 144 labels & 480 \\
+Validation & 109 & 39 & 38 & 20 & 12 \\
+Test & 91 & 42 & 19 & 21 & 9 \\
+\bottomrule
+\end{tabular}
+\caption{Repartition des images par classe. Pour \texttt{train/pasta}, 240 images n'ont pas de fichier label.}
+\label{tab:dataset_images}
+\end{table}
+
+Une verification specifique a mis en evidence un point important: dans
+\texttt{train/pasta}, il y a 384 images mais seulement 144 fichiers d'annotation.
+Les 240 images restantes sont donc interpretees comme des images de fond par
+Ultralytics. Les jeux validation et test de la classe pasta sont correctement
+annotes. Les labels existants utilisent bien l'identifiant de classe 2 pour pasta.
+Ce probleme ne bloque pas l'entrainement, mais il peut reduire le rappel sur pasta,
+car le modele voit certaines images contenant des pates sans boite annotee.
 
 \begin{figure}[H]
   \centering
-  \optionalfigure{figures/class_distribution.png}{0.85}
-  \caption{Class distribution by split.}
+  \optionalfigure{figures/class_distribution.png}{0.82}
+  \caption{Distribution des classes dans les splits du dataset.}
   \label{fig:class_distribution}
 \end{figure}
 
-\section{Methodology}
-The selected method is fine-tuning a COCO-pretrained YOLO11 model. Transfer learning is preferred over training from scratch because the dataset is specialized and relatively small compared with large-scale detection datasets. A pretrained model already contains general visual features such as edges, textures, shapes, and object-level representations.
+\begin{figure}[H]
+  \centering
+  \optionalfigure{figures/annotation_examples.png}{0.95}
+  \caption{Exemples d'images avec annotations.}
+  \label{fig:annotation_examples}
+\end{figure}
 
-Two models are considered:
+\begin{figure}[H]
+  \centering
+  \optionalfigure{figures/bbox_area_distribution.png}{0.82}
+  \caption{Distribution des surfaces de boites englobantes.}
+  \label{fig:bbox_area_distribution}
+\end{figure}
+
+\section{Architecture}
+Deux variantes de YOLO11 ont ete entrainees:
 \begin{itemize}
-  \item YOLO11s: lightweight baseline for fast iteration.
-  \item YOLO11m: main model, selected as a better accuracy-capacity compromise for training on an NVIDIA RTX A6000.
+  \item \textbf{YOLO11s}: modele leger, 9.4 millions de parametres et 21.3 GFLOPs apres fusion.
+  \item \textbf{YOLO11m}: modele moyen, 20.0 millions de parametres et 67.7 GFLOPs apres fusion.
 \end{itemize}
 
-Transformer-based detectors such as DETR \cite{carion2020detr} and Deformable DETR \cite{zhu2021deformable} were considered but not selected for the first training pipeline because they are more complex to fine-tune and typically require more careful training setup. YOLOv9 \cite{wang2024yolov9} is also a strong alternative, but the Ultralytics YOLO11 workflow is simpler for a reproducible notebook pipeline.
+YOLO11 est un detecteur one-stage. Il combine un backbone convolutionnel pour
+extraire les caracteristiques visuelles, un neck multi-echelle pour fusionner les
+representations spatiales, puis une tete de detection qui predit les classes et les
+boites. Les poids pre-entraines sur COCO apportent des representations generales
+utiles, puis la tete est adaptee aux quatre classes du projet.
 
-\section{Hyperparameters}
+Des architectures alternatives existent. DETR \cite{carion2020detr} et Deformable
+DETR \cite{zhu2021deformable} sont des detecteurs bases sur les transformers, mais
+ils demandent souvent plus de donnees et un reglage plus fin. YOLOv9
+\cite{wang2024yolov9} est aussi une alternative moderne. Pour ce projet, YOLO11 via
+Ultralytics a ete retenu car il donne une pipeline simple, robuste dans Jupyter, et
+directement compatible avec les exports de figures, metriques et predictions.
+
+\section{Environnement et hyperparametres}
+L'entrainement a ete lance dans Jupyter sur une carte NVIDIA RTXA6000-48Q avec
+environ 48 Go de memoire GPU. L'environnement observe pendant l'entrainement etait:
+Python 3.13.8, PyTorch 2.6.0+cu124, CUDA disponible, Ultralytics 8.4.39.
+
 \begin{table}[H]
 \centering
 \begin{tabular}{ll}
 \toprule
-Parameter & Value \\
+Parametre & Valeur \\
 \midrule
-Model & YOLO11m pretrained on COCO \\
-Image size & 640 \\
-Epochs & 150 \\
-Early stopping patience & 25 \\
-Optimizer & AdamW \\
-Initial learning rate & 0.001 \\
-Final LR factor & 0.01 \\
-Weight decay & 0.0005 \\
-Warmup epochs & 3 \\
+Modele de depart & \texttt{yolo11s.pt} puis \texttt{yolo11m.pt} \\
+Taille image & 640 \\
+Epochs maximum & 50 \\
+Early stopping & patience = 10 \\
+Batch size & 16 \\
+Workers DataLoader & 0 \\
+Optimiseur & AdamW \\
+Learning rate initial & 0.001 \\
+Facteur final du LR & 0.01 \\
 Scheduler & Cosine LR \\
-Batch size & Auto \\
+Weight decay & 0.0005 \\
+Warmup & 3 epochs \\
 Seed & 42 \\
+AMP & Active \\
 \bottomrule
 \end{tabular}
-\caption{Main training hyperparameters.}
+\caption{Hyperparametres principaux utilises pour les runs finaux.}
 \label{tab:hyperparameters}
 \end{table}
 
-The augmentation policy includes HSV color perturbation, translation, scale jitter, horizontal flips, mosaic augmentation, light mixup, and mosaic closing during the final epochs. These choices are motivated by the visual variability of food images and by the need to reduce overfitting.
+Le choix \texttt{workers=0} est volontaire. Dans l'environnement Jupyter/Python
+3.13, le multiprocessing du DataLoader pouvait bloquer pendant la validation ou le
+test. Le batch fixe a 16 evite aussi les lenteurs de l'autobatch et rend les runs
+plus previsibles. Les augmentations utilisees incluent HSV, translations, scale
+jitter, flip horizontal, mosaic, mixup leger et fermeture du mosaic pendant les
+dernieres epochs.
 
-\section{Results}
-After running the notebook, insert the generated metrics table and figures here.
+\section{Resultats validation}
+Le premier entrainement YOLO11s s'est arrete automatiquement a 46 epochs grace a
+l'early stopping. Le meilleur modele a ete obtenu a l'epoch 36. YOLO11m a termine
+les 50 epochs. Les resultats de validation sont resumes ci-dessous.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrrrr}
+\toprule
+Modele & Params & GFLOPs & Precision & Recall & mAP@0.5 & mAP@0.5:0.95 \\
+\midrule
+YOLO11s & 9.4M & 21.3 & 0.774 & 0.845 & 0.921 & \textbf{0.697} \\
+YOLO11m & 20.0M & 67.7 & 0.771 & 0.842 & \textbf{0.923} & 0.686 \\
+\bottomrule
+\end{tabular}
+\caption{Comparaison globale sur le split validation.}
+\label{tab:val_global}
+\end{table}
+
+YOLO11m obtient une mAP@0.5 tres legerement superieure, mais YOLO11s obtient la
+meilleure mAP@0.5:0.95. Cette metrique est plus stricte car elle moyenne plusieurs
+seuils IoU. Elle mesure donc mieux la qualite de localisation des boites. Comme
+YOLO11s est aussi plus rapide et plus leger, il est retenu comme modele final.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llrrrr}
+\toprule
+Modele & Classe & Images & Instances & mAP@0.5 & mAP@0.5:0.95 \\
+\midrule
+YOLO11s & pizza & 39 & 47 & 0.935 & 0.757 \\
+YOLO11s & sandwich & 38 & 84 & 0.813 & 0.521 \\
+YOLO11s & pasta & 20 & 20 & 0.952 & 0.604 \\
+YOLO11s & hotdog & 12 & 16 & 0.983 & 0.907 \\
+\midrule
+YOLO11m & pizza & 39 & 47 & 0.951 & 0.784 \\
+YOLO11m & sandwich & 38 & 84 & 0.782 & 0.441 \\
+YOLO11m & pasta & 20 & 20 & 0.970 & 0.585 \\
+YOLO11m & hotdog & 12 & 16 & 0.991 & 0.936 \\
+\bottomrule
+\end{tabular}
+\caption{Resultats par classe sur validation.}
+\label{tab:val_per_class}
+\end{table}
 
 \begin{figure}[H]
   \centering
   \optionalfigure{figures/training_curves.png}{0.95}
-  \caption{Training and validation curves.}
+  \caption{Courbes d'entrainement et de validation exportees depuis le notebook.}
   \label{fig:training_curves}
 \end{figure}
 
-\begin{figure}[H]
-  \centering
-  \optionalfigure{figures/confusion_matrix.png}{0.75}
-  \caption{Confusion matrix on the validation or test set.}
-  \label{fig:confusion_matrix}
-\end{figure}
+\section{Resultats test du modele retenu}
+Le modele retenu est:
+\[
+\texttt{runs\_food/yolo11s\_baseline\_safe/weights/best.pt}.
+\]
+Il a ensuite ete evalue sur le split test, compose de 91 images et 152 instances.
 
-\section{Qualitative Inference}
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Split test & Precision & Recall & mAP@0.5 & mAP@0.5:0.95 \\
+\midrule
+YOLO11s & 0.787 & 0.838 & 0.878 & 0.626 \\
+\bottomrule
+\end{tabular}
+\caption{Performance globale du modele final sur test.}
+\label{tab:test_global}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrrr}
+\toprule
+Classe & Images & Instances & Recall & mAP@0.5 & mAP@0.5:0.95 \\
+\midrule
+pizza & 42 & 75 & 0.893 & 0.922 & 0.737 \\
+sandwich & 19 & 41 & 0.891 & 0.762 & 0.434 \\
+pasta & 21 & 21 & 0.766 & 0.931 & 0.527 \\
+hotdog & 9 & 15 & 0.800 & 0.896 & 0.807 \\
+\bottomrule
+\end{tabular}
+\caption{Performance par classe du modele final sur test.}
+\label{tab:test_per_class}
+\end{table}
+
+Le temps moyen mesure sur test est d'environ 0.25 ms de preprocessing, 4.46 ms
+d'inference et 0.60 ms de postprocessing par image. Ces valeurs confirment que
+YOLO11s est adapte a une utilisation interactive ou a une integration applicative
+legere.
+
 \begin{figure}[H]
   \centering
   \optionalfigure{figures/inference_examples.png}{0.95}
-  \caption{Example predictions on test images.}
+  \caption{Exemples de predictions produites par le modele final.}
   \label{fig:inference_examples}
 \end{figure}
 
-\section{Error Analysis and Recommendations}
-The notebook exports class-level metrics and visual predictions. The recommended modifications depend on the observed behavior:
-\begin{itemize}
-  \item If training loss decreases but validation mAP stagnates, reduce model capacity, increase regularization, or improve dataset diversity.
-  \item If both training and validation metrics are weak, increase epochs, inspect label quality, or use a larger image size such as 768.
-  \item If one class has low recall, collect more examples for that class or apply targeted augmentation.
-  \item If visually similar classes are confused, inspect the confusion matrix and add hard examples.
-\end{itemize}
+\section{Analyse des erreurs}
+Les resultats montrent que la detection globale fonctionne correctement, mais que
+les classes ne sont pas toutes au meme niveau. La classe hotdog obtient la meilleure
+mAP@0.5:0.95 sur test, mais elle ne contient que 15 instances: le score est donc
+encourageant mais statistiquement fragile. Pizza est plus stable, avec 75 instances
+et une mAP@0.5:0.95 de 0.737.
+
+La classe sandwich est la plus faible sur la metrique stricte, avec une
+mAP@0.5:0.95 de 0.434 sur test. Cela indique que le modele trouve souvent l'objet
+mais que les boites sont moins precises. C'est coherent avec la variabilite visuelle
+des sandwichs: formes ouvertes ou fermees, pain coupe, ingredients visibles,
+occlusions et tailles variables.
+
+La classe pasta presente aussi une faiblesse relative. Sa mAP@0.5 reste bonne, mais
+la mAP@0.5:0.95 descend a 0.527. L'hypothese principale est la qualite des donnees:
+240 images de \texttt{train/pasta} n'ont pas de label. Ces images peuvent apprendre
+au modele qu'une image contenant des pates ne contient aucun objet, ce qui peut
+degrader le rappel et la localisation.
+
+Un autre avertissement observe pendant l'entrainement indique un melange entre
+annotations detection et segmentation. Ultralytics a ignore les segments et utilise
+seulement les boites. Ce comportement est acceptable pour ce rapport, mais il faut
+nettoyer les annotations si l'objectif est de produire un dataset propre et
+reutilisable.
+
+\section{Ameliorations proposees}
+La priorite numero un est la correction du dataset. Il faut soit annoter les 240
+images \texttt{train/pasta} sans labels, soit les retirer du split train si elles ne
+contiennent pas reellement de pates. Apres cette correction, il faut supprimer les
+caches \texttt{*.cache} et relancer YOLO11s avec les memes hyperparametres pour
+mesurer le gain proprement.
+
+La deuxieme amelioration est l'ajout d'exemples difficiles pour sandwich et pasta:
+objets partiellement visibles, fonds charges, plats multiples, angles varies et
+boites plus precises. Les classes avec peu d'instances, en particulier hotdog,
+doivent aussi etre renforcees pour rendre l'evaluation plus fiable.
+
+La troisieme piste est le tuning. Une fois les labels corriges, il sera pertinent
+de tester une image size de 768 pour ameliorer la localisation, puis de comparer
+avec 640. Il faudra aussi tester des augmentations moins agressives si les boites
+sont trop instables, par exemple reduire mixup ou mosaic. Enfin, il faut ajuster le
+seuil de confiance et le NMS sur le jeu validation avant une inference finale.
+
+La quatrieme piste concerne l'industrialisation. Le modele final peut etre exporte
+en ONNX ou TorchScript, puis teste avec des images externes. Il serait egalement
+utile de conserver un tableau d'experiences avec les hyperparametres, les metriques
+et le chemin du poids final pour chaque run.
 
 \section{Conclusion}
-The proposed pipeline provides a reproducible workflow for training, evaluating, and reporting a YOLO11-based food detector. The first recommended model is YOLO11m, with YOLO11s kept as a lightweight baseline and fallback in case of overfitting.
+Le projet aboutit a une baseline solide de detection d'aliments avec YOLO11. Meme
+si YOLO11m est plus grand, il n'apporte pas de gain utile sur ce dataset: il est
+plus couteux et donne une mAP@0.5:0.95 legerement inferieure a YOLO11s sur
+validation. Le modele final recommande est donc YOLO11s, avec le poids
+\texttt{best.pt} du run \texttt{yolo11s\_baseline\_safe}.
+
+La prochaine iteration doit se concentrer sur la qualite des annotations, surtout
+pour pasta, puis sur l'ajout de donnees difficiles pour sandwich. C'est probablement
+la voie la plus rentable avant de complexifier l'architecture.
 
 \bibliographystyle{plain}
 \bibliography{references}
