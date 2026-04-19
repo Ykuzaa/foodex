@@ -33,7 +33,16 @@ The notebook detects the repository root automatically and reads `dataset/` from
 
 ## Training
 
-First setup the environment once from a Jupyter terminal:
+Simplest setup: use the existing GPU kernel provided by Jupyter, without installing a new PyTorch CUDA stack:
+
+```bash
+cd foodex
+bash scripts/setup_existing_kernel.sh
+```
+
+This script checks that the current kernel already has PyTorch with CUDA, then installs only lightweight missing dependencies.
+
+Alternative isolated setup:
 
 ```bash
 cd foodex
