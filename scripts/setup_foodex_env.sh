@@ -43,12 +43,12 @@ echo "Python       : ${PYTHON_BIN} (${PY_VERSION})"
 echo "Env          : ${ENV_DIR}"
 echo "Torch index  : ${TORCH_CUDA_INDEX}"
 
-if [[ -d "${ENV_DIR}" && ! -x "${ENV_DIR}/bin/python" ]]; then
+if [[ -d "${ENV_DIR}" && ( ! -x "${ENV_DIR}/bin/python" || ! -f "${ENV_DIR}/bin/activate" ) ]]; then
   echo "Removing incomplete environment: ${ENV_DIR}"
   rm -rf "${ENV_DIR}"
 fi
 
-if [[ ! -x "${ENV_DIR}/bin/python" ]]; then
+if [[ ! -x "${ENV_DIR}/bin/python" || ! -f "${ENV_DIR}/bin/activate" ]]; then
   if "${PYTHON_BIN}" -m venv "${ENV_DIR}"; then
     echo "Virtual environment created with python -m venv."
   elif command -v uv >/dev/null 2>&1; then
