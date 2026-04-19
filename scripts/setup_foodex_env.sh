@@ -43,7 +43,35 @@ echo "Python       : ${PYTHON_BIN} (${PY_VERSION})"
 echo "Env          : ${ENV_DIR}"
 echo "Torch index  : ${TORCH_CUDA_INDEX}"
 
-"${PYTHON_BIN}" -m venv "${ENV_DIR}"
+if [[ -d "${ENV_DIR}" && ! -x "${ENV_DIR}/bin/python" ]]; then
+  echo "Removing incomplete environment: ${ENV_DIR}"
+  rm -rf "${ENV_DIR}"
+fi
+
+if [[ ! -x "${ENV_DIR}/bin/python" ]]; then
+  if "${PYTHON_BIN}" -m venv "${ENV_DIR}"; then
+    echo "Virtual environment created with python -m venv."
+  elif command -v uv >/dev/null 2>&1; then
+    echo "python -m venv failed; falling back to uv venv."
+    rm -rf "${ENV_DIR}"
+    uv venv --python "${PYTHON_BIN}" "${ENV_DIR}"
+  elif "${PYTHON_BIN}" -m pip --version >/dev/null 2>&1; then
+    echo "python -m venv failed; falling back to virtualenv."
+    rm -rf "${ENV_DIR}"
+    "${PYTHON_BIN}" -m pip install --user virtualenv
+    "${PYTHON_BIN}" -m virtualenv "${ENV_DIR}"
+  else
+    echo "ERROR: Impossible de creer un environnement virtuel."
+    echo "Solutions possibles:"
+    echo "  1. Installer uv dans l'image Jupyter, puis relancer ce script."
+    echo "  2. Utiliser une image Jupyter avec python3-venv disponible."
+    echo "  3. Installer python3.12-venv si tu as les droits apt/sudo."
+    exit 1
+  fi
+else
+  echo "Using existing environment: ${ENV_DIR}"
+fi
+
 source "${ENV_DIR}/bin/activate"
 
 python -m pip install --upgrade pip setuptools wheel
