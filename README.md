@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="Project logo" width="180">
+</p>
+
 # Foodex
 
 Notebook and report pipeline for training a YOLO11 food detector on four classes:
